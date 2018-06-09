@@ -1,4 +1,7 @@
 ---
+- name: Set up the vars
+  set_fact:
+    ansible_host_address: "{{ hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] }}"
 
 - name: Install pacemaker and pcs
   yum:
@@ -24,17 +27,17 @@
 - name: Authenticate the cluster nodes
   command: pcs cluster auth "{{ pcs_primary_address }}" "{{ pcs_secondary_address }}" -u hacluster -p "{{ pcs_hacluster_user_pass_pt }}"
   become: yes
-  when: hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] == pcs_primary_address
+  when: ansible_host_address == pcs_primary_address
 
 - name: Set up the cluster
   command: pcs cluster setup --name "{{ pcs_cluster_name }}" "{{ pcs_primary_address }}" "{{ pcs_secondary_address }}"
   become: yes
-  when: hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] == pcs_primary_address
+  when: ansible_host_address == pcs_primary_address
   
 - name: Start the cluster
   command: pcs cluster start --all
   become: yes
-  when: hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] == pcs_primary_address
+  when: ansible_host_address == pcs_primary_address
 
 - name: Ensure that corosync and pacemaker services are enabled
   service:
@@ -48,9 +51,9 @@
 - name: Disable STONITH
   command: pcs property set stonith-enabled=false
   become: yes
-  when: hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] == pcs_primary_address
+  when: ansible_host_address == pcs_primary_address
 
 - name: Create the floating ip resource
   command: pcs resource create virtual_ip ocf:heartbeat:IPaddr2 ip="{{ pcs_virtual_ip }}" cidr_netmask=32 op monitor interval=30s
   become: yes
-  when: hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] == pcs_primary_address
+  when: ansible_host_address == pcs_primary_address
