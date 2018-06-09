@@ -6,3 +6,4 @@ pcs_primary_address: 192.168.50.11
 pcs_secondary_address: 192.168.50.12
 pcs_cluster_name: myhacluster
 pcs_virtual_ip: 192.168.50.100
+pcs_disable_stonith: true

@@ -3,6 +3,18 @@
   set_fact:
     ansible_host_address: "{{ hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] }}"
 
+- name: Register cluster properties
+  command: "pcs property show"
+  become: yes
+  register: "_pcs_property_show"
+  changed_when: false
+
+- name: Register cluster resources
+  command: "pcs resource show --full"
+  become: yes
+  register: "_pcs_resource_show"
+  changed_when: false
+
 - name: Install pacemaker and pcs
   yum:
     name: 
@@ -24,20 +36,38 @@
     enabled: yes
   become: yes
 
+- name: Check if the nodes are authorized
+  command: pcs cluster auth "{{ pcs_primary_address }}" "{{ pcs_secondary_address }}"
+  become: yes
+  register: _pcs_nodes_authorized
+  ignore_errors: yes
+  changed_when: no
+
 - name: Authenticate the cluster nodes
   command: pcs cluster auth "{{ pcs_primary_address }}" "{{ pcs_secondary_address }}" -u hacluster -p "{{ pcs_hacluster_user_pass_pt }}"
   become: yes
-  when: ansible_host_address == pcs_primary_address
+  when: >
+        _pcs_nodes_authorized is failed and
+        ansible_host_address == pcs_primary_address
 
 - name: Set up the cluster
   command: pcs cluster setup --name "{{ pcs_cluster_name }}" "{{ pcs_primary_address }}" "{{ pcs_secondary_address }}"
   become: yes
-  when: ansible_host_address == pcs_primary_address
+  when: >
+        ('cluster-name: %s'|format(pcs_cluster_name) not in _pcs_property_show['stdout']) and
+        ansible_host_address == pcs_primary_address
   
+- name: Check if the cluster is running
+  command: pcs cluster status
+  become: yes
+  register: _cluster_is_running
+  ignore_errors: yes
+  changed_when: no
+
 - name: Start the cluster
   command: pcs cluster start --all
   become: yes
-  when: ansible_host_address == pcs_primary_address
+  when: _cluster_is_running is failed
 
 - name: Ensure that corosync and pacemaker services are enabled
   service:
@@ -51,9 +81,14 @@
 - name: Disable STONITH
   command: pcs property set stonith-enabled=false
   become: yes
-  when: ansible_host_address == pcs_primary_address
+  when: >
+        pcs_disable_stonith and
+        ('stonith-enabled: false' not in _pcs_property_show['stdout']) and
+        ansible_host_address == pcs_primary_address
 
 - name: Create the floating ip resource
   command: pcs resource create virtual_ip ocf:heartbeat:IPaddr2 ip="{{ pcs_virtual_ip }}" cidr_netmask=32 op monitor interval=30s
   become: yes
-  when: ansible_host_address == pcs_primary_address
+  when: >
+        ('virtual_ip' not in _pcs_resource_show['stdout']) and
+        ansible_host_address == pcs_primary_address
