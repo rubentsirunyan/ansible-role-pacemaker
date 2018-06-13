@@ -3,17 +3,6 @@
   set_fact:
     ansible_host_address: "{{ hostvars[inventory_hostname]['ansible_' + pcs_cluster_interface]['ipv4']['address'] }}"
 
-- name: Register cluster properties
-  command: "pcs property show"
-  become: yes
-  register: "_pcs_property_show"
-  changed_when: false
-
-- name: Register cluster resources
-  command: "pcs resource show --full"
-  become: yes
-  register: "_pcs_resource_show"
-  changed_when: false
 
 - name: Install pacemaker and pcs
   yum:
@@ -42,6 +31,20 @@
   register: _pcs_nodes_authorized
   ignore_errors: yes
   changed_when: no
+
+- name: Register cluster properties
+  command: "pcs property show"
+  become: yes
+  register: "_pcs_property_show"
+  changed_when: false
+  ignore_errors: yes
+
+- name: Register cluster resources
+  command: "pcs resource show --full"
+  become: yes
+  register: "_pcs_resource_show"
+  changed_when: false
+  ignore_errors: yes
 
 - name: Authenticate the cluster nodes
   command: pcs cluster auth "{{ pcs_primary_address }}" "{{ pcs_secondary_address }}" -u hacluster -p "{{ pcs_hacluster_user_pass_pt }}"
